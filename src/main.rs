@@ -13,6 +13,7 @@ use dotenv::dotenv;
 use serde::Deserialize;
 use utils::{comma_separated, is_plaintext_agent};
 use futures::future::join_all;
+use validator::{Validate, ValidationError};
 
 // TODO: extract as a formatter?
 // TODO: formatting with emojis? 🚀💎🙌
@@ -56,13 +57,29 @@ fn default_separator() -> String {
     " ".to_string()
 }
 
-#[derive(Deserialize)]
+fn default_precision() -> i8 {
+    2
+}
+
+fn validate_vec_length<T>(v: &Vec<T>) -> Result<(), ValidationError> {
+        if v.len() < 1|| v.len() > 10{
+            return Err(ValidationError::new("invalid number of tickers"));
+        }
+        Ok(())
+}
+
+
+#[derive(Validate, Deserialize)]
 struct QuotesQuery {
     #[serde(deserialize_with = "comma_separated")]
+    #[validate(custom = "validate_vec_length")]
     tickers: Vec<String>,
 
     #[serde(default = "default_separator")]
     separator: String,
+
+    #[serde(default = "default_precision")]
+    precision: i8,
 }
 
 #[get("/quote")]
@@ -80,7 +97,7 @@ async fn quotes(data: web::Data<AppState>,mut info: Query<QuotesQuery>) -> Resul
 // TODO: endpoint to get multiple tickers at once?
 // TODO: endpoint for crypto?
 // TODO: endpoint for ETFs?
-// TODO: endpoint for indexes?��🙌
+// TODO: endpoint for indexes??
 
 #[get("/")]
 async fn index() -> Result<HttpResponse, Error> {
