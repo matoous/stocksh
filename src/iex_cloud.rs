@@ -1,6 +1,6 @@
+use moka::future::Cache;
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
-use moka::future::Cache;
 use std::time::Duration;
 
 const IEX_URL: &str = "https://cloud.iexapis.com/v1";
@@ -38,7 +38,12 @@ impl Client {
     }
 
     pub async fn get(&self, path: &str) -> reqwest::Response {
-        self.client.get(path).query(&[("token", &self.token)]).send().await.unwrap()
+        self.client
+            .get(path)
+            .query(&[("token", &self.token)])
+            .send()
+            .await
+            .unwrap()
     }
 
     pub async fn get_quote(&self, symbol: String) -> QuoteResponse {

@@ -1,6 +1,6 @@
-use serde::Deserializer;
 use serde::de;
 use serde::de::Visitor;
+use serde::Deserializer;
 use std::fmt;
 use std::fmt::Display;
 use std::iter::FromIterator;
@@ -20,11 +20,10 @@ static PLAIN_TEXT_AGENTS: &'static [&str] = &[
 ];
 
 pub fn is_plaintext_agent(agent: &str) -> bool {
-    return PLAIN_TEXT_AGENTS.iter().any(
-        |s| agent.to_lowercase().contains(s)
-    );
+    return PLAIN_TEXT_AGENTS
+        .iter()
+        .any(|s| agent.to_lowercase().contains(s));
 }
-
 
 pub fn comma_separated<'de, V, T, D>(deserializer: D) -> Result<V, D::Error>
 where
@@ -59,4 +58,3 @@ where
     let visitor = CommaSeparated(PhantomData, PhantomData);
     deserializer.deserialize_str(visitor)
 }
-
