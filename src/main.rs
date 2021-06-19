@@ -1,14 +1,18 @@
 mod iex_cloud;
+mod utils;
 
 extern crate log;
 
+use actix_web::web::Query;
 use actix_web::{get, web, App, HttpServer, HttpResponse, middleware, Error, HttpRequest};
 use crate::iex_cloud::QuoteResponse;
 use std::sync::Mutex;
-use std::fmt::Display;
-use std::{env, fmt};
+use std::{env, fmt::{self, Display}};
 use termion::color;
 use dotenv::dotenv;
+use serde::Deserialize;
+use utils::{comma_separated, is_plaintext_agent};
+use futures::future::join_all;
 
 // TODO: extract as a formatter?
 // TODO: formatting with emojis? 🚀💎🙌
@@ -34,26 +38,8 @@ impl QuoteResponse {
     }
 }
 
-static PLAIN_TEXT_AGENTS: &'static [&str] = &[
-    "curl",
-    "httpie",
-    "lwp-request",
-    "wget",
-    "python-requests",
-    "openbsd ftp",
-    "powershell",
-    "fetch",
-    "aiohttp",
-];
-
-fn is_plaintext_agent(agent: &str) -> bool {
-    return PLAIN_TEXT_AGENTS.iter().any(
-        |s| agent.to_lowercase().contains(s)
-    );
-}
-
 #[get("/quote/{ticker}")]
-async fn index(data: web::Data<AppState>, req: HttpRequest, path: web::Path<String>) -> Result<HttpResponse, Error> {
+async fn quote(data: web::Data<AppState>, req: HttpRequest, path: web::Path<String>) -> Result<HttpResponse, Error> {
     let ticker = path.into_inner();
     let client = data.iex_client.lock().unwrap();
     let v = client.get_quote(ticker).await;
@@ -62,11 +48,44 @@ async fn index(data: web::Data<AppState>, req: HttpRequest, path: web::Path<Stri
             .content_type("text/plain")
             .body(format!("{}", v)))
     } else {
-        Ok(HttpResponse::Ok().content_type("text/plain").body(format!("HI!")))
+        Ok(HttpResponse::Ok().content_type("text/plain").body(format!("currently we support plaintext agents only")))
     }
 }
 
+fn default_separator() -> String {
+    " ".to_string()
+}
+
+#[derive(Deserialize)]
+struct QuotesQuery {
+    #[serde(deserialize_with = "comma_separated")]
+    tickers: Vec<String>,
+
+    #[serde(default = "default_separator")]
+    separator: String,
+}
+
+#[get("/quote")]
+async fn quotes(data: web::Data<AppState>,mut info: Query<QuotesQuery>) -> Result<HttpResponse, Error> {
+    let client = data.iex_client.lock().unwrap();
+    // TODO: limit mux number of requested tickesr
+    // get all requested quotes asynchronously
+    let results = join_all(
+            info.tickers.iter_mut().map(|ticker| client.get_quote(ticker.to_string()))
+    ).await;
+    let result = results.iter().map(|q| format!("{}",q)).collect::<Vec<String>>().join(&info.separator);
+    Ok(HttpResponse::Ok().content_type("text/plain").body(result))
+}
+
 // TODO: endpoint to get multiple tickers at once?
+// TODO: endpoint for crypto?
+// TODO: endpoint for ETFs?
+// TODO: endpoint for indexes?��🙌
+
+#[get("/")]
+async fn index() -> Result<HttpResponse, Error> {
+    Ok(HttpResponse::Ok().content_type("text/plain; charset=utf-8").body("🚀"))
+}
 
 struct AppState {
     iex_client: Mutex<iex_cloud::Client>,
@@ -86,8 +105,12 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || App::new()
         .app_data(app_data.clone())
         .wrap(middleware::Logger::default())
-        .service(index))
+        .service(index)
+        .service(quotes)
+        .service(quote)
+        )
         .bind("127.0.0.1:8080")?
         .run()
         .await
 }
+
