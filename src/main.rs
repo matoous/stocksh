@@ -154,6 +154,7 @@ struct AppState {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    println!("starting up");
     dotenv().ok();
 
     env::set_var("RUST_LOG", "actix_todo=debug,actix_web=info");
@@ -173,7 +174,7 @@ async fn main() -> std::io::Result<()> {
             .service(quotes)
             .service(quote)
     })
-    .bind("127.0.0.1:8080")?
+    .bind("0.0.0.0:8080")?
     .run()
     .await
 }
